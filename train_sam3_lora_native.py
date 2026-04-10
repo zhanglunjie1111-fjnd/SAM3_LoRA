@@ -781,10 +781,23 @@ class SAM3TrainerNative:
 
         # Build Model
         print_rank0("Building SAM3 model...")
+
+        # Read model config with fallback to defaults
+        model_cfg = self.config.get("model", {})
+        load_from_HF = model_cfg.get("load_from_HF", True)
+        checkpoint_path = model_cfg.get("checkpoint_path", None)
+
+        if not load_from_HF and checkpoint_path:
+            print_rank0(f"Loading local model from: {checkpoint_path}")
+            print_rank0("HuggingFace download DISABLED")
+        elif load_from_HF:
+            print_rank0("Will download model from HuggingFace (if needed)")
+
         self.model = build_sam3_image_model(
             device=self.device.type,
             compile=False,
-            load_from_HF=True,  # Tries to download from HF if checkpoint_path is None
+            load_from_HF=load_from_HF,
+            checkpoint_path=checkpoint_path,
             bpe_path="sam3/assets/bpe_simple_vocab_16e6.txt.gz",
             eval_mode=False
         )

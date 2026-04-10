@@ -1,0 +1,82 @@
+# SAM3 LoRA Training Configuration - CLOTHING SEGMENTATION
+# Optimized for clothing/semantic segmentation tasks
+# Uses RLE-encoded masks for precise segmentation
+
+# Model settings
+model:
+  name: "facebook/sam3"
+  checkpoint_path: "/mnt/vris-comfy/models/sam3/sam3.pt"  # 本地模型路径
+  load_from_HF: false                       # 禁用HF模型下载
+  cache_dir: null
+
+# LoRA settings - Optimized for clothing segmentation
+lora:
+  rank: 16                    # Balanced capacity for clothing (saves memory vs 32)
+  alpha: 32                   # 2x rank (standard practice)
+  dropout: 0.05               # Low dropout (clothing data is usually clean)
+
+  # Target modules - Full adaptation for best clothing segmentation quality
+  target_modules:
+    - "q_proj"                # Attention Query projection
+    - "k_proj"                # Attention Key projection
+    - "v_proj"                # Attention Value projection
+    - "out_proj"              # Attention output projection
+    - "qkv"                   # Vision encoder fused QKV
+    - "proj"                  # Vision encoder output projection
+    - "fc1"                   # MLP layer 1
+    - "fc2"                   # MLP layer 2
+    - "c_fc"                  # Text encoder MLP (important for "clothing" prompt!)
+    - "c_proj"                # Text encoder MLP
+    - "linear1"               # Transformer FFN
+    - "linear2"               # Transformer FFN
+
+  # Apply LoRA to ALL key components for clothing segmentation
+  apply_to_vision_encoder: true      # Visual features (essential for clothing texture)
+  apply_to_text_encoder: true        # Text understanding (CRITICAL for "clothing" prompt alignment)
+  apply_to_geometry_encoder: true    # Spatial reasoning
+  apply_to_detr_encoder: true        # Object detection (find all people)
+  apply_to_detr_decoder: true        # Object localization
+  apply_to_mask_decoder: true        # Mask generation (ESSENTIAL for precise boundaries)
+
+# Training settings - Optimized for small dataset (11 images)
+training:
+  data_dir: "/root/code/SAM3_LoRA/data"  # Your converted COCO dataset
+  batch_size: 1                    # Small batch for high-res images (2048px)
+  num_workers: 2
+
+  learning_rate: 5e-5              # SAM3 recommended LR for fine-tuning
+  weight_decay: 0.01
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1e-8
+  max_grad_norm: 1.0
+
+  num_epochs: 100                  # More epochs for small dataset (avoid underfitting)
+  warmup_steps: 50                 # Shorter warmup for small dataset
+  lr_scheduler: "cosine"
+
+  logging_steps: 5                 # Frequent logging (small dataset)
+  eval_steps: 10                   # Validate every 10 steps
+  save_steps: 20                   # Save checkpoints frequently
+  save_total_limit: 5              # Keep last 5 checkpoints
+
+  mixed_precision: "bf16"          # Use bfloat16 to save memory
+  seed: 42
+  gradient_accumulation_steps: 16  # Effective batch = 1×16 = 16 (compensate small batch)
+
+output:
+  output_dir: "outputs/clothing_lora"
+  logging_dir: "logs"
+  save_lora_only: true             # Only save LoRA weights (~20-50MB)
+  push_to_hub: false
+  hub_model_id: null
+
+evaluation:
+  metric: "iou"
+  save_predictions: true           # Save predictions for visualization
+  compute_metrics_during_training: true
+
+hardware:
+  device: "cuda"
+  dataloader_pin_memory: true
+  use_compile: false
